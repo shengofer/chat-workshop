@@ -1,9 +1,14 @@
-var io = require('vendor/socket.io.js');
+var io = require('../vendor/socket.io.js');
 
 var socket = io();
 
 //what can it do
 pubsub.extend(socket);
+
+socket.on("user data", function(userData) {
+    console.log(userData);
+    socket.publish('new user online', userData);
+});
 
 //when to do what
 socket.on(CONST.SOCKET_SERVER.MSG_SENT, notifyAboutNewMessage);

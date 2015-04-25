@@ -602,24 +602,91 @@
 }));
 
 },{}],2:[function(require,module,exports){
+var io = require('../vendor/socket.io.js');
 
-},{}],3:[function(require,module,exports){
+var socket = io();
+
+//what can it do
+pubsub.extend(socket);
+
+socket.on("user data", function(userData) {
+    console.log(userData);
+    socket.publish('new user online', userData);
+});
+
+//when to do what
+socket.on(CONST.SOCKET_SERVER.MSG_SENT, notifyAboutNewMessage);
+
+socket.subscribe(CONST.APP.MSG_SUBMITTED, sendMessage);
+
+function sendMessage(msg) {
+    socket.emit(CONST.SOCKET_CLIENT.MSG_SENT, msg);
+}
+
+//how to do
+function notifyAboutNewMessage(msg) {
+    socket.publish(CONST.SOCKET_CLIENT.MSG_RECEIVED, msg);
+}
+
+module.exports = socket;
+},{"../vendor/socket.io.js":11}],3:[function(require,module,exports){
+var API = require('./API/socket-controller.js');
+var UsersController = require('./users/controller.js');
+
+function InitAppController() {
+
+    var app = {};
+
+    pubsub.extend(app);
+
+    var usersController = UsersController();
+
+    app.subscribe('new user online', function(userData) {
+        console.log('appC', userData);
+        app.publish('update users list', userData);
+    });
+
+
+    return app;
+
+
+
+}
+
+module.exports = InitAppController;
+
+
+},{"./API/socket-controller.js":2,"./users/controller.js":7}],4:[function(require,module,exports){
 //Global namespaces
 window._D = require('./vendor/_D.js');
 window.pubsub = require('./vendor/pubsub.js');
 window.CONST = require('./const.js');
 window.Mustache = require('mustache');
 
-var io = require('./vendor/socket.io.js');
-var socket = io();
+
 
 window.addEventListener('load', function() {
+
     var initApp = require('./app-controller.js');
 
-
+    initApp();
 
 });
-},{"./app-controller.js":2,"./const.js":4,"./vendor/_D.js":5,"./vendor/pubsub.js":6,"./vendor/socket.io.js":7,"mustache":1}],4:[function(require,module,exports){
+},{"./app-controller.js":3,"./const.js":6,"./vendor/_D.js":9,"./vendor/pubsub.js":10,"mustache":1}],5:[function(require,module,exports){
+function CreateBaseView() {
+    var view = {};
+
+    view.render = function() {
+        view.parentNode.add(view.viewNode.put(Mustache.to_html(view.template, view.viewModel)));
+    };
+
+    pubsub.extend(view);
+
+    return view;
+}
+
+module.exports = CreateBaseView;
+},{}],6:[function(require,module,exports){
 module.exports = {
     SOCKET_CLIENT: {
         MSG_RECEIVED: 'new mes from server',
@@ -652,7 +719,46 @@ module.exports = {
     }
 };
 
-},{}],5:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
+var View = require('./view.js');
+
+function UsersController() {
+
+    var controller = {};
+
+    pubsub.extend(controller);
+
+    controller.view = View();
+
+    controller.subscribe('update users list', function(userData) {
+        console.log('user controller get ', userData);
+        controller.view.addUser(userData);
+    });
+
+    return controller;
+
+}
+
+module.exports = UsersController;
+},{"./view.js":8}],8:[function(require,module,exports){
+var View = require('../base/view-base.js');
+
+function CreateUserOnlineListPlease() {
+
+    var view = View();
+
+    view.el = document.getElementById('usersOnline');
+
+    view.addUser = function(userData) {
+        view.el.appendChild(_D('li').put(userData.displayName).elements[0]);
+    };
+
+    return view;
+
+}
+
+module.exports = CreateUserOnlineListPlease;
+},{"../base/view-base.js":5}],9:[function(require,module,exports){
 (function(window){
     'use strict';
 
@@ -865,7 +971,7 @@ module.exports = {
     }
 
 }(window || exports));
-},{}],6:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 
 var PubSub = function () {
 
@@ -926,7 +1032,7 @@ var PubSub = function () {
 };
 
 module.exports = new PubSub();
-},{}],7:[function(require,module,exports){
+},{}],11:[function(require,module,exports){
 (function (global){
 !function(e){if("object"==typeof exports&&"undefined"!=typeof module)module.exports=e();else if("function"==typeof define&&define.amd)define([],e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.io=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
 
@@ -7930,4 +8036,4 @@ function toArray(list, index) {
 });
 
 }).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}]},{},[3])
+},{}]},{},[4])

@@ -1,4 +1,5 @@
-var express           =     require('express'),
+var pubsub            =     require('./src/app/vendor/pubsub.js'),
+    express           =     require('express'),
     passport          =     require('passport'),
     util              =     require('util'),
     FacebookStrategy  =     require('passport-facebook').Strategy,
@@ -6,12 +7,14 @@ var express           =     require('express'),
     cookieParser      =     require('cookie-parser'),
     bodyParser        =     require('body-parser'),
     config            =     require('./configuration/config'),
-    userModel         =     require('./model/user')
+    userModel         =     require('./model/user'),
     app               =     express();
 
+pubsub.extend(app);
+
 var http = require('http').Server(app);
-var io = require('socket.io')(http);
 var CONST = require('./src/app/const.js');
+var io = require('socket.io')(http);
 
 
 // Passport session setup.
@@ -38,6 +41,9 @@ passport.use(new FacebookStrategy({
              email = null,
             id = profile.id
         );
+
+        app.publish('login success', user);
+
       return done(null, profile);
     });
   }
@@ -95,6 +101,14 @@ http.listen(process.env.PORT || 3000, function(){
 
 io.on('connection', function(socket){
     console.log('connected');
+
+    pubsub.extend(socket);
+
+    socket.subscribe('login success', function(userData) {
+        console.log(socket, socket.emit);
+        socket.emit('user data', user);
+    });
+
 
     socket.on(CONST.SOCKET_CLIENT.MSG_SENT, function(msg){
         console.log(msg);
