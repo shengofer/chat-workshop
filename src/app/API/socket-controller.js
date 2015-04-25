@@ -6,7 +6,6 @@ var socket = io();
 pubsub.extend(socket);
 
 socket.on("user data", function(userData) {
-    console.log(userData);
     socket.publish('new user online', userData);
 });
 

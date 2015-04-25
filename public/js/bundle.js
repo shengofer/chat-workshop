@@ -610,7 +610,6 @@ var socket = io();
 pubsub.extend(socket);
 
 socket.on("user data", function(userData) {
-    console.log(userData);
     socket.publish('new user online', userData);
 });
 
@@ -630,10 +629,11 @@ function notifyAboutNewMessage(msg) {
 
 module.exports = socket;
 },{"../vendor/socket.io.js":11}],3:[function(require,module,exports){
-var API = require('./API/socket-controller.js');
 var UsersController = require('./users/controller.js');
 
 function InitAppController() {
+
+    var API = require('./API/socket-controller.js');
 
     var app = {};
 
@@ -642,7 +642,6 @@ function InitAppController() {
     var usersController = UsersController();
 
     app.subscribe('new user online', function(userData) {
-        console.log('appC', userData);
         app.publish('update users list', userData);
     });
 
@@ -731,7 +730,6 @@ function UsersController() {
     controller.view = View();
 
     controller.subscribe('update users list', function(userData) {
-        console.log('user controller get ', userData);
         controller.view.addUser(userData);
     });
 

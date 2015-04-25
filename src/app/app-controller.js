@@ -1,7 +1,8 @@
-var API = require('./API/socket-controller.js');
 var UsersController = require('./users/controller.js');
 
 function InitAppController() {
+
+    var API = require('./API/socket-controller.js');
 
     var app = {};
 
@@ -10,7 +11,6 @@ function InitAppController() {
     var usersController = UsersController();
 
     app.subscribe('new user online', function(userData) {
-        console.log('appC', userData);
         app.publish('update users list', userData);
     });
 

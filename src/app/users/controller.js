@@ -9,7 +9,6 @@ function UsersController() {
     controller.view = View();
 
     controller.subscribe('update users list', function(userData) {
-        console.log('user controller get ', userData);
         controller.view.addUser(userData);
     });
 
