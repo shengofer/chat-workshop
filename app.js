@@ -11,26 +11,7 @@ var express           =     require('express'),
 
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
-var CONST = require('./public/app/const.js');
-
-app.get('/', function(req, res){
-    res.sendFile(__dirname + '/dist/app.html');
-});
-
-app.use(express.static(__dirname));
-
-http.listen(process.env.PORT || 8000, function(){
-    console.log('listening on *:8000');
-});
-
-io.on('connection', function(socket){
-    console.log('connected');
-
-    socket.on(CONST.SOCKET_CLIENT.MSG_SENT, function(msg){
-        console.log(msg);
-        io.emit(CONST.SOCKET_SERVER.MSG_SENT, msg);
-    });
-});
+var CONST = require('./src/app/const.js');
 
 
 // Passport session setup.

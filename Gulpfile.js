@@ -9,7 +9,7 @@ var gulp = require('gulp'),
 
 paths = {
     src: {
-        root: './src',
+        root: './',
         html: './src/app.html',
         styl: './src/styl/main.styl',
         js: './src/app/**',
@@ -17,11 +17,11 @@ paths = {
         img: './src/img/**'
     },
     dist: {
-        root: './dist',
-        css: './dist/css',
-        js: './dist/js',
-        img: './dist/img',
-        vendor: './dist/vendor'
+        root: './public',
+        css: './public/css',
+        js: './public/js',
+        img: './public',
+        vendor: './public/vendor'
     }
 };
 /*
@@ -74,4 +74,4 @@ gulp.task('watch', function() {
     gulp.watch(paths.src.js, ['browserify']);
 });
 
-gulp.task('default', ['html','img','styl','browserify','watch']);
+gulp.task('default', ['img','styl','browserify','watch']);
