@@ -20,7 +20,7 @@ passport.deserializeUser(function(obj, done) {
   done(null, obj);
 });
 
-
+var user = {};
 // Use the FacebookStrategy within Passport.
 
 passport.use(new FacebookStrategy({
@@ -30,7 +30,11 @@ passport.use(new FacebookStrategy({
   },
   function(accessToken, refreshToken, profile, done) {
     process.nextTick(function () {
-
+        user = new userModel(
+            profile.displayName,
+             email = null,
+            id = profile.id
+        );
       return done(null, profile);
     });
   }
@@ -47,7 +51,13 @@ app.use(passport.session());
 app.use(express.static(__dirname + '/public'));
 
 app.get('/', function(req, res){
-  res.render('index', { user: req.user });
+    if(user.displayName){
+        res.render('index', { user: req.user });
+    }
+    else {
+        res.render('index', {user:undefined});
+    }
+
 });
 
 app.get('/account', ensureAuthenticated, function(req, res){
@@ -58,16 +68,7 @@ app.get('/auth/facebook', passport.authenticate('facebook',{scope:'email'}));
 
 
 app.get('/auth/facebook/callback',
-  passport.authenticate('facebook', { successRedirect : '/', failureRedirect: '/login' },function(err,profile){
-      console.log(profile);
-
-      var user = new userModel(
-          profile.displayName,
-          email = profile.emails[0],
-          id = profile.id
-      );
-
-  }),
+  passport.authenticate('facebook', { successRedirect : '/', failureRedirect: '/login' }),
 
   function(req, res) {
     res.redirect('/');
