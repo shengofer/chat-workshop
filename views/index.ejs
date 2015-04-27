@@ -1,20 +1,9 @@
 <html>
 <head>
-<title>Facebook Login using Node and Express</title>
-	<% if (user) { %>
+<title>own chat with blackjack and so on</title>
 	<script src="js/bundle.js"></script>
-	<% } %>
 	<link rel="stylesheet" href="css/styles.css"/>
 </head>
-<body>
-<% if (!user) { %>
-  <div style="width:500px;height:180px;background-color:#ececec;padding:80px;margin-left:22%;margin-top:9%;">
-	<h2 style="font-size:40px;">Welcome! Please log in.</h2>
-	<a href="/auth/facebook"><img src="fb-login.jpg" width="151" height="24"></a>
-	</div>
-<% } else { %>
-	<h2>Hello, <%= user.displayName %>.</h2>
-<ul id="usersOnline"></ul>
-<% } %>
+<body class="page">
 </body>
 </html>

@@ -1,4 +1,3 @@
-
 var PubSub = function () {
 
     var subToken = 0;

@@ -1,4 +1,6 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+
+},{}],2:[function(require,module,exports){
 /*!
  * mustache.js - Logic-less {{mustache}} templates with JavaScript
  * http://github.com/janl/mustache.js
@@ -601,68 +603,168 @@
 
 }));
 
-},{}],2:[function(require,module,exports){
+},{}],3:[function(require,module,exports){
+var PS = require('../vendor/pubsub.js');
+
+function fbAPI() {
+
+    (function(d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "//connect.facebook.net/en_US/sdk.js";
+        fjs.parentNode.insertBefore(js, fjs);
+    }(document, 'script', 'facebook-jssdk'));
+
+    var fbapi = {};
+
+    PS.extend(fbapi);
+
+    // This is called with the results from from FB.getLoginStatus().
+    fbapi.statusChangeCallback = function(response) {
+        if (response.status === 'connected') {
+            // Logged into your app and Facebook.
+            document.getElementById('status').innerHTML = 'wait for it...';
+            fbapi.publish(CONST.FB.LOGGED);
+
+        } else if (response.status === 'not_authorized') {
+            // The person is logged into Facebook, but not your app.
+
+        } else {
+            // The person is not logged into Facebook, so we're not sure if
+            // they are logged into this app or not.
+
+        }
+    };
+
+    // This function is called when someone finishes with the Login
+    // Button.  See the onlogin handler attached to it in the sample
+    // code below.
+    window.checkLoginState = function () {
+        FB.getLoginStatus(function(response) {
+            fbapi.statusChangeCallback(response);
+        });
+    };
+
+    window.fbAsyncInit = function() {
+        FB.init({
+            appId      : '1580275722248737',
+            cookie     : true,  // enable cookies to allow the server to access
+                                // the session
+            xfbml      : true,  // parse social plugins on this page
+            version    : 'v2.2' // use version 2.2
+        });
+
+        FB.getLoginStatus(function(response) {
+            fbapi.statusChangeCallback(response);
+        });
+
+    };
+
+    return fbapi;
+}
+
+module.exports = fbAPI();
+},{"../vendor/pubsub.js":25}],4:[function(require,module,exports){
 var io = require('../vendor/socket.io.js');
+var usersCollection = require('../storage/users-collection.js');
+var PS = require('../vendor/pubsub.js');
 
-var socket = io();
+function Socket() {
 
-//what can it do
-pubsub.extend(socket);
+    var socket = io();
 
-socket.on("user data", function(userData) {
-    socket.publish('new user online', userData);
-});
+    PS.extend(socket);
 
-//when to do what
-socket.on(CONST.SOCKET_SERVER.MSG_SENT, notifyAboutNewMessage);
+    socket.subscribe(CONST.APP.LOGGED, function() {
+        socket.emit(CONST.SOCKET_CLIENT.LOGGED_IN, PASSPORT.getUserData());
+    });
 
-socket.subscribe(CONST.APP.MSG_SUBMITTED, sendMessage);
+    socket.subscribe(CONST.APP.MSG_SUBMITTED, function(msg) {
+        socket.emit(CONST.SOCKET_CLIENT.MSG_SENT, {
+            id: PASSPORT.getId(),
+            body: msg
+        });
+    });
 
-function sendMessage(msg) {
-    socket.emit(CONST.SOCKET_CLIENT.MSG_SENT, msg);
+    socket.on(CONST.SOCKET_SERVER.NEW_USER_ONLINE, function(passport) {
+        usersCollection.add(passport);
+
+        socket.publish(CONST.SOCKET_CLIENT.NEW_USER_ONLINE, passport);
+    });
+
+    socket.on(CONST.SOCKET_SERVER.MSG_SENT, function(msg) {
+        socket.publish(CONST.SOCKET_CLIENT.MSG_RECEIVED, msg);
+    });
+
+    return socket;
 }
 
-//how to do
-function notifyAboutNewMessage(msg) {
-    socket.publish(CONST.SOCKET_CLIENT.MSG_RECEIVED, msg);
-}
 
-module.exports = socket;
-},{"../vendor/socket.io.js":11}],3:[function(require,module,exports){
-var UsersController = require('./users/controller.js');
 
+module.exports = Socket();
+},{"../storage/users-collection.js":20,"../vendor/pubsub.js":25,"../vendor/socket.io.js":26}],5:[function(require,module,exports){
+var UsersOnline = require('./users-online/controller.js');
+var RoomController = require('./room/controller.js');
+var ProfileController = require('./profile/controller.js');
+var Auth = require('./auth/controller.js');
+var Layout = require('./layout/controller.js');
+var PS = require('./vendor/pubsub.js');
 function InitAppController() {
 
-    var API = require('./API/socket-controller.js');
+    //init socket
+    require('./API/socket.js');
 
     var app = {};
 
-    pubsub.extend(app);
+    PS.extend(app);
 
-    var usersController = UsersController();
+    var auth = Auth();
 
-    app.subscribe('new user online', function(userData) {
-        app.publish('update users list', userData);
+    app.publish(CONST.APP.AUTH);
+
+    app.subscribe(CONST.AUTH.LOGGED, function() {
+        Layout();
+
+        app.publish(CONST.APP.RENDER_LAYOUT);
     });
 
+    app.subscribe(CONST.LAYOUT.RENDERED, function() {
+        UsersOnline();
+        RoomController();
+        ProfileController();
+
+        app.publish(CONST.APP.INIT_ROOM_CONTROLLER);
+
+        app.publish(CONST.APP.LOGGED);
+    });
+
+    app.subscribe(CONST.ROOM.MSG_SUBMITTED, function(msg) {
+        app.publish(CONST.APP.MSG_SUBMITTED, msg);
+    });
+
+    app.subscribe(CONST.SOCKET_CLIENT.MSG_RECEIVED, function(msg) {
+        app.publish(CONST.APP.MSG_RECEIVED, msg);
+    });
+
+    app.subscribe(CONST.SOCKET_CLIENT.NEW_USER_ONLINE, function(passport) {
+        app.publish(CONST.APP.NEW_USER_ONLINE, passport);
+    });
 
     return app;
-
-
-
 }
 
 module.exports = InitAppController;
 
 
-},{"./API/socket-controller.js":2,"./users/controller.js":7}],4:[function(require,module,exports){
+},{"./API/socket.js":4,"./auth/controller.js":7,"./layout/controller.js":12,"./profile/controller.js":14,"./room/controller.js":17,"./users-online/controller.js":21,"./vendor/pubsub.js":25}],6:[function(require,module,exports){
 //Global namespaces
 window._D = require('./vendor/_D.js');
-window.pubsub = require('./vendor/pubsub.js');
 window.CONST = require('./const.js');
 window.Mustache = require('mustache');
+window.PASSPORT = require('./auth/passport.js')();
 
-
+require('./API/fbAPI.js');
 
 window.addEventListener('load', function() {
 
@@ -671,92 +773,454 @@ window.addEventListener('load', function() {
     initApp();
 
 });
-},{"./app-controller.js":3,"./const.js":6,"./vendor/_D.js":9,"./vendor/pubsub.js":10,"mustache":1}],5:[function(require,module,exports){
-function CreateBaseView() {
-    var view = {};
+},{"./API/fbAPI.js":3,"./app-controller.js":5,"./auth/passport.js":8,"./const.js":11,"./vendor/_D.js":24,"mustache":2}],7:[function(require,module,exports){
+var createLoginView = require('./view.js');
+var PS = require('../vendor/pubsub.js');
 
-    view.render = function() {
-        view.parentNode.add(view.viewNode.put(Mustache.to_html(view.template, view.viewModel)));
+var Auth = function() {
+    var auth = {};
+
+    PS.extend(auth);
+
+    auth.view = createLoginView();
+
+    auth.subscribe(CONST.APP.AUTH, function(){
+        auth.view.append();
+    });
+
+    auth.subscribe(CONST.FB.LOGGED,  function getUserData() {
+
+        FB.api("/me", {fields: 'id, first_name, last_name, picture'},  function(response) {
+            PASSPORT.set({
+                id: response.id,
+                firstName: response.first_name,
+                lastName: response.last_name,
+                icon: response.picture.data.url
+            });
+
+            if (PASSPORT.getUserData().picture) {
+                PS.publish(CONST.AUTH.LOGGED);
+            }
+        });
+
+        FB.api("/me/picture?width=199&height=199",  function(response) {
+            PASSPORT.set({
+                picture: response.data.url
+            });
+
+            if (PASSPORT.getUserData().firstName) {
+                PS.publish(CONST.AUTH.LOGGED);
+            }
+
+            auth.view.remove();
+        });
+
+    });
+
+    return auth;
+};
+
+module.exports = Auth;
+},{"../vendor/pubsub.js":25,"./view.js":9}],8:[function(require,module,exports){
+var Passport = function() {
+
+    var passport ={},
+        _passport = {};
+
+    passport.set = function(userData) {
+        for (var n in userData) {
+            if (userData.hasOwnProperty(n)) {
+                _passport[n] = userData[n];
+            }
+        }
     };
 
-    pubsub.extend(view);
+    passport.getId = function() {
+        return _passport.id;
+    };
+
+    passport.getName = function() {
+        return _passport.firstName + ' ' + _passport.lastName;
+    };
+
+    passport.getIcon = function() {
+        return _passport.icon;
+    };
+
+    passport.getPicture = function() {
+        return _passport.picture;
+    };
+
+    passport.getUserData = function() {
+        return _passport;
+    };
+
+    return passport;
+};
+
+module.exports = Passport;
+},{}],9:[function(require,module,exports){
+(function (__dirname){
+
+var View = require('./../base/base-view.js');
+var template = "<div class=\"login\">\n    <fb:login-button scope=\"public_profile,email\" onlogin=\"checkLoginState();\">\n    </fb:login-button>\n\n    <div id=\"status\">\n    </div>\n</div>";
+
+var AuthView = function() {
+    var view = View();
+
+    view.parent = CONST.SEL.PAGE;
+    view.el = CONST.SEL.LOGIN;
+    view.template = template;
+
+    return view;
+};
+
+module.exports = AuthView;
+}).call(this,"/auth")
+},{"./../base/base-view.js":10,"fs":1}],10:[function(require,module,exports){
+var PS = require('../vendor/pubsub.js');
+
+function BaseView() {
+    var view = {};
+
+    PS.extend(view);
+
+    view.render =  function (model) {
+        _D(view.el).put(Mustache.to_html(view.template, model));
+    };
+
+    view.append = function(model) {
+        _D(view.parent).add(Mustache.to_html(view.template, model));
+    };
+
+    view.remove = function() {
+        _D(view.el).del();
+    };
 
     return view;
 }
 
-module.exports = CreateBaseView;
-},{}],6:[function(require,module,exports){
+module.exports = BaseView;
+},{"../vendor/pubsub.js":25}],11:[function(require,module,exports){
 module.exports = {
     SOCKET_CLIENT: {
+        NEW_USER_ONLINE: 'app/socket/new-user',
+        LOGGED_IN: 'new user logged',
         MSG_RECEIVED: 'new mes from server',
         MSG_SENT: 'client io send message'
     },
     SOCKET_SERVER: {
         MSG_SENT: 'server io send message',
-        MSG_RECEIVED: 'new mes from server'
+        MSG_RECEIVED: 'new mes from server',
+        NEW_USER_ONLINE: 'new user appeared online'
     },
     APP: {
+        LOGGED: 'user login success',
         NEW_MSG: 'received msg from server',
         MSG_RECEIVED: 'new message received from socket',
         MSG_SUBMITTED: 'new message mediated by controller',
         INIT_ROOM_CONTROLLER: 'init room controller',
-        AUTH: 'init auth controller'
+        AUTH: 'init auth controller',
+        RENDER_LAYOUT: 'app/render-layout'
+    },
+    FB: {
+        LOGGED: 'successfully logged via fb'
     },
     AUTH: {
-        SUCCESS: 'login successful'
+        LOGGED: 'user logged'
     },
     VIEW: {
         MSG_SUBMITTED: 'new message submited',
         LOGIN: 'login name submitted'
     },
+    ROOM: {
+        MSG_SUBMITTED: 'client entered a message'
+    },
+    LAYOUT: {
+        RENDERED: 'app/layout/rendered'
+    },
     SEL: {
-        ROOM_PARENT: '.rooms-container',
-        LOGIN_PARENT: '.page',
-        MSG_SUBMIT_BTN: '.messageSubmit',
-        LOGIN_SUBMIT_BTN: '.login-submit',
-        MSGS: '.messages'
+        PAGE: '.page',
+        PROFILE: '.profile',
+        ROOM: '.room',
+        ROOMS_PARENT: '.rooms-container',
+        ROOM_FORM: '.room-form',
+        ROOM_MSGS: '.room-messages',
+        LOGIN: '.login',
+        USERS_ONLINE: '.users-online',
+        USERS_ONLINE_LI: '.users-online-li'
     }
 };
 
-},{}],7:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 var View = require('./view.js');
+var PS = require('../vendor/pubsub.js');
 
 function UsersController() {
 
     var controller = {};
 
-    pubsub.extend(controller);
+    PS.extend(controller);
 
     controller.view = View();
 
-    controller.subscribe('update users list', function(userData) {
-        controller.view.addUser(userData);
+    controller.subscribe(CONST.APP.RENDER_LAYOUT, function() {
+        controller.view.render();
+        controller.publish(CONST.LAYOUT.RENDERED);
     });
 
     return controller;
-
 }
 
 module.exports = UsersController;
-},{"./view.js":8}],8:[function(require,module,exports){
-var View = require('../base/view-base.js');
+},{"../vendor/pubsub.js":25,"./view.js":13}],13:[function(require,module,exports){
+(function (__dirname){
+var View = require('../base/base-view.js');
+var template = "<div class=\"profile\"></div>\n<div class=\"users\">\n    <p class=\"title\">online</p>\n    <ul class=\"users-online\">\n\n    </ul>\n</div>\n<div class=\"rooms-container\"></div>";
+
+function UserOnline() {
+
+    var view = View();
+
+    view.template = template;
+    view.el = CONST.SEL.PAGE;
+
+    return view;
+}
+
+module.exports = UserOnline;
+}).call(this,"/layout")
+},{"../base/base-view.js":10}],14:[function(require,module,exports){
+var View = require('./view.js');
+var Model = require('./model.js');
+var PS = require('../vendor/pubsub.js');
+
+function UsersController() {
+
+    var controller = {};
+
+    PS.extend(controller);
+
+    controller.view = View();
+    controller.model = Model();
+
+    controller.subscribe(CONST.APP.LOGGED, function() {
+        controller.model.set(PASSPORT.getName(),PASSPORT.getPicture());
+
+        controller.view.render( controller.model.get() );
+    });
+
+    return controller;
+}
+
+module.exports = UsersController;
+},{"../vendor/pubsub.js":25,"./model.js":15,"./view.js":16}],15:[function(require,module,exports){
+function ProfileModel() {
+    var _model = {},
+        model = {};
+
+    model.set = function (name, src) {
+        _model.name = name;
+        _model.src = src;
+    };
+
+    model.get = function() {
+        return _model;
+    };
+
+    return model;
+}
+
+module.exports = ProfileModel;
+},{}],16:[function(require,module,exports){
+(function (__dirname){
+var template = "<img class=\"profile__img\" src=\"{{src}}\" alt=\"\"/>\n<p class=\"profile__name\">{{name}}</p>";
+var View = require('../base/base-view.js');
 
 function CreateUserOnlineListPlease() {
 
     var view = View();
 
-    view.el = document.getElementById('usersOnline');
-
-    view.addUser = function(userData) {
-        view.el.appendChild(_D('li').put(userData.displayName).elements[0]);
-    };
+    view.template = template;
+    view.el = CONST.SEL.PROFILE;
 
     return view;
-
 }
 
 module.exports = CreateUserOnlineListPlease;
-},{"../base/view-base.js":5}],9:[function(require,module,exports){
+}).call(this,"/profile")
+},{"../base/base-view.js":10}],17:[function(require,module,exports){
+var RoomView = require('./views/room-view.js');
+var MsgView = require('./views/message-view.js');
+var usersCollection = require('../storage/users-collection.js');
+var PS = require('../vendor/pubsub.js');
+
+function RoomController() {
+
+    var controller = {};
+
+    PS.extend(controller);
+
+    controller.roomView = RoomView();
+    controller.msgView = MsgView();
+
+    controller.subscribe(CONST.APP.INIT_ROOM_CONTROLLER, function(){
+        controller.roomView.append();
+        controller.roomView.listen();
+    });
+
+    controller.subscribe(CONST.APP.MSG_RECEIVED, function(msg) {
+        controller.msgView.append({
+            body: msg.body,
+            src: usersCollection.getIconById(msg.id)
+        });
+    });
+
+    return controller;
+}
+
+module.exports = RoomController;
+},{"../storage/users-collection.js":20,"../vendor/pubsub.js":25,"./views/message-view.js":18,"./views/room-view.js":19}],18:[function(require,module,exports){
+(function (__dirname){
+var template = "<li class=\"room-messages-msg\">\n    <img src=\"{{src}}\" alt=\"\" class=\"room-messages-msg__img\"/>\n    <span class=\"room-messages-msg__body\">{{body}}</span>\n</li>";
+var View = require('./../../base/base-view.js');
+
+var MessageView = function() {
+
+    var view = View();
+
+    view.parent = CONST.SEL.ROOM_MSGS;
+    view.template = template;
+
+    return view;
+};
+
+module.exports = MessageView;
+}).call(this,"/room/views")
+},{"./../../base/base-view.js":10}],19:[function(require,module,exports){
+(function (__dirname){
+var template = "<div class=\"room\">\n    <p class=\"room__title\"> gathering room </p>\n    <ul class=\"room-messages\">\n    </ul>\n    <form class=\"room-form\" action=\"\">\n        <input type=\"text\" class=\"room-form__input\">\n    </form>\n</div>";
+var View = require('./../../base/base-view.js');
+
+
+var RoomView = function() {
+
+    var view = View();
+
+    view.parent = CONST.SEL.ROOMS_PARENT;
+    view.el = CONST.SEL.ROOM;
+    view.template = template;
+
+
+    view.listen = function() {
+        _D(CONST.SEL.ROOM_FORM).bind('submit', function(evt) {
+            var input = _D('.room-form__input').elements[0];
+
+            view.publish(CONST.ROOM.MSG_SUBMITTED, input.value);
+
+            input.value = '';
+
+            evt.preventDefault();
+        }, false);
+    };
+
+    return view;
+};
+
+module.exports = RoomView;
+}).call(this,"/room/views")
+},{"./../../base/base-view.js":10}],20:[function(require,module,exports){
+var UsersCollection = function() {
+    var collection ={},
+        _collection = [];
+
+    collection.add = function(userId) {
+        if (_collection.filter(function(id) {
+                return id === userId;
+            }).length === 0) {
+            _collection.push(userId);
+        }
+        _collection.push(userId);
+    };
+
+    collection.remove = function(userId) {
+        _collection.splice(_collection.indexOf(userId),1);
+    };
+
+    collection.get = function() {
+        return _collection;
+    };
+
+    collection.getIconById = function (userId) {
+        return _collection.filter( function(user) {
+            return user.id === userId;
+        })[0].icon;
+    };
+
+    return collection;
+};
+
+module.exports = UsersCollection();
+},{}],21:[function(require,module,exports){
+var View = require('./view.js');
+var Model = require('./model.js');
+var PS = require('../vendor/pubsub.js');
+
+function UsersController() {
+
+    var controller = {};
+
+    PS.extend(controller);
+
+    controller.view = View();
+    controller.model = Model();
+
+    controller.subscribe(CONST.APP.NEW_USER_ONLINE, function(passport) {
+        controller.model.set(passport.firstName, passport.icon);
+
+        controller.view.append( controller.model.get() );
+    });
+
+    return controller;
+}
+
+module.exports = UsersController;
+},{"../vendor/pubsub.js":25,"./model.js":22,"./view.js":23}],22:[function(require,module,exports){
+function UsersOnlineModel() {
+    var _model = {},
+        model = {};
+
+    model.set = function (name, src) {
+        _model.name = name;
+        _model.src = src;
+    };
+
+    model.get = function() {
+        return _model;
+    };
+
+    return model;
+}
+
+module.exports = UsersOnlineModel;
+},{}],23:[function(require,module,exports){
+(function (__dirname){
+var View = require('../base/base-view.js');
+var template = "<li class=\"users-online-li\">\n    <img class=\"users-online-li__img\" src=\"{{src}}\" alt=\"\"/>\n    <span class=\"users-online-li__name\">{{name}}</span>\n</li>";
+
+function UserOnline() {
+
+    var view = View();
+
+    view.template = template;
+    view.parent = CONST.SEL.USERS_ONLINE;
+
+    return view;
+}
+
+module.exports = UserOnline;
+}).call(this,"/users-online")
+},{"../base/base-view.js":10}],24:[function(require,module,exports){
 (function(window){
     'use strict';
 
@@ -803,15 +1267,27 @@ module.exports = CreateUserOnlineListPlease;
 
     /**
      * Adds node to this parent
-     * @param {object} node
+     * @param {object || html} node
      * @returns {D}
      */
     D.prototype.add = function (node) {
         Array.prototype.forEach.call(this.elements, function (el) {
-            el.appendChild(node.elements[0].cloneNode(true));
-
+            if (node.elements) {
+                el.appendChild(node.elements[0].cloneNode(true));
+            } else {
+                el.insertAdjacentHTML('beforeend', node);
+            }
         });
 
+        return this;
+    };
+
+    /**
+     * Removes first node from _D node list
+     * @returns {D}
+     */
+    D.prototype.del = function () {
+        this.elements[0].parentNode.removeChild(this.elements[0]);
         return this;
     };
 
@@ -969,8 +1445,7 @@ module.exports = CreateUserOnlineListPlease;
     }
 
 }(window || exports));
-},{}],10:[function(require,module,exports){
-
+},{}],25:[function(require,module,exports){
 var PubSub = function () {
 
     var subToken = 0;
@@ -1030,7 +1505,7 @@ var PubSub = function () {
 };
 
 module.exports = new PubSub();
-},{}],11:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 (function (global){
 !function(e){if("object"==typeof exports&&"undefined"!=typeof module)module.exports=e();else if("function"==typeof define&&define.amd)define([],e);else{var f;"undefined"!=typeof window?f=window:"undefined"!=typeof global?f=global:"undefined"!=typeof self&&(f=self),f.io=e()}}(function(){var define,module,exports;return (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(_dereq_,module,exports){
 
@@ -8034,4 +8509,4 @@ function toArray(list, index) {
 });
 
 }).call(this,typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}]},{},[4])
+},{}]},{},[6])

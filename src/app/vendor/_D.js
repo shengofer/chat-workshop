@@ -44,15 +44,27 @@
 
     /**
      * Adds node to this parent
-     * @param {object} node
+     * @param {object || html} node
      * @returns {D}
      */
     D.prototype.add = function (node) {
         Array.prototype.forEach.call(this.elements, function (el) {
-            el.appendChild(node.elements[0].cloneNode(true));
-
+            if (node.elements) {
+                el.appendChild(node.elements[0].cloneNode(true));
+            } else {
+                el.insertAdjacentHTML('beforeend', node);
+            }
         });
 
+        return this;
+    };
+
+    /**
+     * Removes first node from _D node list
+     * @returns {D}
+     */
+    D.prototype.del = function () {
+        this.elements[0].parentNode.removeChild(this.elements[0]);
         return this;
     };
 

@@ -1,10 +1,10 @@
 //Global namespaces
 window._D = require('./vendor/_D.js');
-window.pubsub = require('./vendor/pubsub.js');
 window.CONST = require('./const.js');
 window.Mustache = require('mustache');
+window.PASSPORT = require('./auth/passport.js')();
 
-
+require('./API/fbAPI.js');
 
 window.addEventListener('load', function() {
 

@@ -11,7 +11,8 @@ paths = {
     src: {
         root: './',
         html: './src/app.html',
-        styl: './src/styl/main.styl',
+        styl: './src/styl/**',
+        styl_main: './src/styl/main.styl',
         js: './src/app/**',
         js_app: './src/app/app.js',
         img: './src/img/**'
@@ -49,7 +50,7 @@ gulp.task('browserify', function() {
 });
 
 gulp.task('styl', function() {
-    gulp.src(paths.src.styl)
+    gulp.src(paths.src.styl_main)
         .pipe(sourcemaps.init())
         .pipe(stylus())
         .pipe(concat('styles.css'))
